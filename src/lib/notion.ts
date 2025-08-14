@@ -459,7 +459,7 @@ export async function getBlogPosts(
 export async function getBlogPost(slug: string): Promise<BlogPost | null> {
   try {
     const allPosts = await getAllBlogPosts();
-    
+
     if (!Array.isArray(allPosts)) {
       console.error("Invalid posts data structure");
       return null;
@@ -471,13 +471,13 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
     // Find the post by slug
     const foundPage = allPosts.find((page: any) => {
       if (!page || !page.properties) return false;
-      
+
       const properties = page.properties;
       const title =
         safeGet(properties, 'Name.title.0.plain_text') ||
         safeGet(properties, 'Title.title.0.plain_text') ||
         "";
-      
+
       const pageSlug =
         safeGet(properties, 'Slug.rich_text.0.plain_text') ||
         title
@@ -495,6 +495,28 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
     }
 
     const post = convertNotionPageToBlogPost(foundPage);
+
+    // For demo posts, add simple content
+    if (!NOTION_ENABLED) {
+      post.content = JSON.stringify({
+        block: {
+          id: post.id,
+          type: 'page',
+          properties: {},
+          format: {},
+          content: [
+            {
+              id: 'demo-content',
+              type: 'text',
+              properties: {
+                title: [[post.excerpt]]
+              }
+            }
+          ]
+        }
+      });
+      return post;
+    }
 
     // Add delay before fetching content
     await delay(200);
@@ -515,7 +537,7 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
       if (pageContent && typeof pageContent === "object") {
         // Add delay before stringifying
         await delay(100);
-        
+
         // Safely stringify the content
         try {
           post.content = JSON.stringify(pageContent);
@@ -528,12 +550,14 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
       }
     } catch (contentError) {
       console.error("Error fetching page content:", contentError);
-      
+
       // Add delay before fallback
       await delay(300);
-      
+
       // Fallback: try to get basic content from blocks API
       try {
+        if (!notion) throw new Error("Notion client not available");
+
         const blocks = await Promise.race([
           notion.blocks.children.list({
             block_id: post.id,
@@ -548,14 +572,14 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
         if (blocks?.results && Array.isArray(blocks.results)) {
           // Add delay before processing blocks
           await delay(100);
-          
+
           console.log("record map", blocks.results);
-          
+
           // Safely process blocks
-          const safeBlocks = blocks.results.filter((block: any) => 
+          const safeBlocks = blocks.results.filter((block: any) =>
             block && typeof block === 'object' && block.id
           );
-          
+
           post.content = JSON.stringify(safeBlocks);
         } else {
           console.error("Invalid blocks structure:", blocks);
