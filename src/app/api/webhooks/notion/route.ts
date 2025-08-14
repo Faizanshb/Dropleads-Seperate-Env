@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { webhookMonitor } from '@/lib/webhook-monitor';
 
 // Types for Notion webhook events
 interface NotionWebhookEvent {
