@@ -110,6 +110,12 @@ const safeGet = (obj: any, path: string, defaultValue: any = null) => {
 };
 
 export async function getBlogDatabases() {
+  // Return empty array if Notion is not configured
+  if (!NOTION_ENABLED || !notion) {
+    console.log("Notion integration not configured - using demo mode");
+    return [];
+  }
+
   try {
     // Return cached database ID if available
     if (cachedDatabaseId) {
