@@ -131,11 +131,18 @@ export async function POST(request: NextRequest) {
     // Log webhook receipt
     console.log(`Processed ${events.length} Notion webhook events`);
 
+    // Log successful webhook processing
+    webhookMonitor.logEvent({
+      event_type: 'notion_webhook',
+      success: true,
+      payload_size: body.length
+    });
+
     return NextResponse.json(
-      { 
-        success: true, 
+      {
+        success: true,
         processed: events.length,
-        cache_invalidated: shouldInvalidate 
+        cache_invalidated: shouldInvalidate
       },
       { status: 200 }
     );
