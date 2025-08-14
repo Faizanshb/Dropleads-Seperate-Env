@@ -149,8 +149,57 @@ export async function getBlogDatabases() {
   }
 }
 
+// Demo blog posts for when Notion is not configured
+const DEMO_BLOG_POSTS = [
+  {
+    id: 'demo-1',
+    properties: {
+      Name: { title: [{ plain_text: 'Getting Started with GoFindy' }] },
+      Excerpt: { rich_text: [{ plain_text: 'Learn how to use GoFindy for data enrichment and lead generation.' }] },
+      Date: { date: { start: '2024-01-15' } },
+      Author: { people: [{ name: 'GoFindy Team' }] },
+      Category: { select: { name: 'Tutorial' } },
+      Tags: { multi_select: [{ name: 'Getting Started' }, { name: 'Tutorial' }] },
+      'Read Time': { number: 5 },
+      Status: { select: { name: 'Published' } }
+    }
+  },
+  {
+    id: 'demo-2',
+    properties: {
+      Name: { title: [{ plain_text: 'Advanced Data Enrichment Techniques' }] },
+      Excerpt: { rich_text: [{ plain_text: 'Discover advanced strategies for enriching your business data.' }] },
+      Date: { date: { start: '2024-01-10' } },
+      Author: { people: [{ name: 'GoFindy Team' }] },
+      Category: { select: { name: 'Advanced' } },
+      Tags: { multi_select: [{ name: 'Data Enrichment' }, { name: 'Advanced' }] },
+      'Read Time': { number: 8 },
+      Status: { select: { name: 'Published' } }
+    }
+  },
+  {
+    id: 'demo-3',
+    properties: {
+      Name: { title: [{ plain_text: 'Best Practices for B2B Lead Generation' }] },
+      Excerpt: { rich_text: [{ plain_text: 'Essential tips and strategies for effective B2B lead generation.' }] },
+      Date: { date: { start: '2024-01-05' } },
+      Author: { people: [{ name: 'GoFindy Team' }] },
+      Category: { select: { name: 'Marketing' } },
+      Tags: { multi_select: [{ name: 'Lead Generation' }, { name: 'B2B' }] },
+      'Read Time': { number: 6 },
+      Status: { select: { name: 'Published' } }
+    }
+  }
+];
+
 // Helper function to get all blog posts with caching
 async function getAllBlogPosts() {
+  // Return demo posts if Notion is not configured
+  if (!NOTION_ENABLED || !notion) {
+    console.log("Using demo blog posts - Notion not configured");
+    return DEMO_BLOG_POSTS;
+  }
+
   const now = Date.now();
   const webhookInvalidated = checkWebhookInvalidation();
 
