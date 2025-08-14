@@ -4,15 +4,14 @@
 import { Client } from "@notionhq/client";
 import { NotionAPI } from "notion-client";
 
-if (!process.env.NOTION_TOKEN) {
-  throw new Error("Invalid token");
-}
+// Check if Notion integration is available
+const NOTION_ENABLED = !!process.env.NOTION_TOKEN;
 
 // Initialize Notion client for API access with production-optimized timeout
-const notion = new Client({
+const notion = NOTION_ENABLED ? new Client({
   auth: process.env.NOTION_TOKEN,
   timeoutMs: 30000, // Increased for production
-});
+}) : null;
 
 // Initialize unofficial Notion client for page content
 const notionClient = new NotionAPI({
