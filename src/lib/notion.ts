@@ -58,6 +58,18 @@ let cachedDatabaseId: string | null = null;
 let cachedBlogPosts: { posts: any[]; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Helper to check webhook cache invalidation
+function checkWebhookInvalidation(): boolean {
+  try {
+    // Dynamic import to avoid issues during build
+    const { shouldInvalidateCache } = require('@/app/api/webhooks/notion/route');
+    return shouldInvalidateCache();
+  } catch (error) {
+    // Webhook module might not be available, continue with time-based cache
+    return false;
+  }
+}
+
 // Helper function to add delay for production stability
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
