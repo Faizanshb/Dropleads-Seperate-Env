@@ -149,6 +149,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error processing Notion webhook:', error);
+
+    // Log failed webhook processing
+    webhookMonitor.logEvent({
+      event_type: 'notion_webhook',
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
