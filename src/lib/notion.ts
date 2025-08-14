@@ -147,10 +147,19 @@ export async function getBlogDatabases() {
 // Helper function to get all blog posts with caching
 async function getAllBlogPosts() {
   const now = Date.now();
-  
-  // Return cached posts if they're still fresh
-  if (cachedBlogPosts && now - cachedBlogPosts.timestamp < CACHE_DURATION) {
+  const webhookInvalidated = checkWebhookInvalidation();
+
+  // Return cached posts if they're still fresh and not invalidated by webhook
+  if (cachedBlogPosts &&
+      now - cachedBlogPosts.timestamp < CACHE_DURATION &&
+      !webhookInvalidated) {
     return cachedBlogPosts.posts;
+  }
+
+  // Clear cache if webhook invalidation occurred
+  if (webhookInvalidated) {
+    cachedBlogPosts = null;
+    console.log('Cache cleared due to webhook invalidation');
   }
 
   try {
