@@ -4,15 +4,14 @@
 import { Client } from "@notionhq/client";
 import { NotionAPI } from "notion-client";
 
-if (!process.env.NOTION_TOKEN) {
-  throw new Error("Invalid token");
-}
+// Check if Notion integration is available
+const NOTION_ENABLED = !!process.env.NOTION_TOKEN;
 
 // Initialize Notion client for API access with production-optimized timeout
-const notion = new Client({
+const notion = NOTION_ENABLED ? new Client({
   auth: process.env.NOTION_TOKEN,
   timeoutMs: 30000, // Increased for production
-});
+}) : null;
 
 // Initialize unofficial Notion client for page content
 const notionClient = new NotionAPI({
@@ -58,6 +57,18 @@ let cachedDatabaseId: string | null = null;
 let cachedBlogPosts: { posts: any[]; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Helper to check webhook cache invalidation
+function checkWebhookInvalidation(): boolean {
+  try {
+    // Dynamic import to avoid issues during build
+    const { shouldInvalidateCache } = require('@/app/api/webhooks/notion/route');
+    return shouldInvalidateCache();
+  } catch (error) {
+    // Webhook module might not be available, continue with time-based cache
+    return false;
+  }
+}
+
 // Helper function to add delay for production stability
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -99,6 +110,12 @@ const safeGet = (obj: any, path: string, defaultValue: any = null) => {
 };
 
 export async function getBlogDatabases() {
+  // Return empty array if Notion is not configured
+  if (!NOTION_ENABLED || !notion) {
+    console.log("Notion integration not configured - using demo mode");
+    return [];
+  }
+
   try {
     // Return cached database ID if available
     if (cachedDatabaseId) {
@@ -132,13 +149,71 @@ export async function getBlogDatabases() {
   }
 }
 
+// Demo blog posts for when Notion is not configured
+const DEMO_BLOG_POSTS = [
+  {
+    id: 'demo-1',
+    properties: {
+      Name: { title: [{ plain_text: 'Getting Started with GoFindy' }] },
+      Excerpt: { rich_text: [{ plain_text: 'Learn how to use GoFindy for data enrichment and lead generation.' }] },
+      Date: { date: { start: '2024-01-15' } },
+      Author: { people: [{ name: 'GoFindy Team' }] },
+      Category: { select: { name: 'Tutorial' } },
+      Tags: { multi_select: [{ name: 'Getting Started' }, { name: 'Tutorial' }] },
+      'Read Time': { number: 5 },
+      Status: { select: { name: 'Published' } }
+    }
+  },
+  {
+    id: 'demo-2',
+    properties: {
+      Name: { title: [{ plain_text: 'Advanced Data Enrichment Techniques' }] },
+      Excerpt: { rich_text: [{ plain_text: 'Discover advanced strategies for enriching your business data.' }] },
+      Date: { date: { start: '2024-01-10' } },
+      Author: { people: [{ name: 'GoFindy Team' }] },
+      Category: { select: { name: 'Advanced' } },
+      Tags: { multi_select: [{ name: 'Data Enrichment' }, { name: 'Advanced' }] },
+      'Read Time': { number: 8 },
+      Status: { select: { name: 'Published' } }
+    }
+  },
+  {
+    id: 'demo-3',
+    properties: {
+      Name: { title: [{ plain_text: 'Best Practices for B2B Lead Generation' }] },
+      Excerpt: { rich_text: [{ plain_text: 'Essential tips and strategies for effective B2B lead generation.' }] },
+      Date: { date: { start: '2024-01-05' } },
+      Author: { people: [{ name: 'GoFindy Team' }] },
+      Category: { select: { name: 'Marketing' } },
+      Tags: { multi_select: [{ name: 'Lead Generation' }, { name: 'B2B' }] },
+      'Read Time': { number: 6 },
+      Status: { select: { name: 'Published' } }
+    }
+  }
+];
+
 // Helper function to get all blog posts with caching
 async function getAllBlogPosts() {
+  // Return demo posts if Notion is not configured
+  if (!NOTION_ENABLED || !notion) {
+    console.log("Using demo blog posts - Notion not configured");
+    return DEMO_BLOG_POSTS;
+  }
+
   const now = Date.now();
-  
-  // Return cached posts if they're still fresh
-  if (cachedBlogPosts && now - cachedBlogPosts.timestamp < CACHE_DURATION) {
+  const webhookInvalidated = checkWebhookInvalidation();
+
+  // Return cached posts if they're still fresh and not invalidated by webhook
+  if (cachedBlogPosts &&
+      now - cachedBlogPosts.timestamp < CACHE_DURATION &&
+      !webhookInvalidated) {
     return cachedBlogPosts.posts;
+  }
+
+  // Clear cache if webhook invalidation occurred
+  if (webhookInvalidated) {
+    cachedBlogPosts = null;
+    console.log('Cache cleared due to webhook invalidation');
   }
 
   try {
@@ -384,7 +459,7 @@ export async function getBlogPosts(
 export async function getBlogPost(slug: string): Promise<BlogPost | null> {
   try {
     const allPosts = await getAllBlogPosts();
-    
+
     if (!Array.isArray(allPosts)) {
       console.error("Invalid posts data structure");
       return null;
@@ -396,13 +471,13 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
     // Find the post by slug
     const foundPage = allPosts.find((page: any) => {
       if (!page || !page.properties) return false;
-      
+
       const properties = page.properties;
       const title =
         safeGet(properties, 'Name.title.0.plain_text') ||
         safeGet(properties, 'Title.title.0.plain_text') ||
         "";
-      
+
       const pageSlug =
         safeGet(properties, 'Slug.rich_text.0.plain_text') ||
         title
@@ -420,6 +495,28 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
     }
 
     const post = convertNotionPageToBlogPost(foundPage);
+
+    // For demo posts, add simple content
+    if (!NOTION_ENABLED) {
+      post.content = JSON.stringify({
+        block: {
+          id: post.id,
+          type: 'page',
+          properties: {},
+          format: {},
+          content: [
+            {
+              id: 'demo-content',
+              type: 'text',
+              properties: {
+                title: [[post.excerpt]]
+              }
+            }
+          ]
+        }
+      });
+      return post;
+    }
 
     // Add delay before fetching content
     await delay(200);
@@ -440,7 +537,7 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
       if (pageContent && typeof pageContent === "object") {
         // Add delay before stringifying
         await delay(100);
-        
+
         // Safely stringify the content
         try {
           post.content = JSON.stringify(pageContent);
@@ -453,12 +550,14 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
       }
     } catch (contentError) {
       console.error("Error fetching page content:", contentError);
-      
+
       // Add delay before fallback
       await delay(300);
-      
+
       // Fallback: try to get basic content from blocks API
       try {
+        if (!notion) throw new Error("Notion client not available");
+
         const blocks = await Promise.race([
           notion.blocks.children.list({
             block_id: post.id,
@@ -473,14 +572,14 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
         if (blocks?.results && Array.isArray(blocks.results)) {
           // Add delay before processing blocks
           await delay(100);
-          
+
           console.log("record map", blocks.results);
-          
+
           // Safely process blocks
-          const safeBlocks = blocks.results.filter((block: any) => 
+          const safeBlocks = blocks.results.filter((block: any) =>
             block && typeof block === 'object' && block.id
           );
-          
+
           post.content = JSON.stringify(safeBlocks);
         } else {
           console.error("Invalid blocks structure:", blocks);
